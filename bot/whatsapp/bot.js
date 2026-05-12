@@ -168,50 +168,6 @@ async function handleMessage(message) {
     throw error;
   }
 }
-        whatsappPhone,
-        body.serviceID,
-        body.phone,
-        body.value,
-        body.amount
-      );
-
-    case '/api/whatsapp/cable/plans':
-      return await mozosubz.getCablePlans(body.provider);
-
-    case '/api/whatsapp/cable/purchase':
-      return await mozosubz.purchaseCable(
-        whatsappPhone,
-        body.provider,
-        body.plan,
-        body.customerId,
-        body.amount
-      );
-
-    case '/api/whatsapp/electricity/plans':
-      return await mozosubz.getElectricityPlans();
-
-    case '/api/whatsapp/electricity/purchase':
-      return await mozosubz.purchaseElectricity(
-        whatsappPhone,
-        body.disco,
-        body.customerId,
-        body.amount
-      );
-
-    case '/api/whatsapp/balance':
-      return await mozosubz.checkBalance(whatsappPhone);
-
-    case '/api/whatsapp/deposit/initiate':
-      return await mozosubz.initiateDeposit(
-        whatsappPhone,
-        body.amount,
-        body.description
-      );
-
-    default:
-      throw new Error(`Unknown endpoint: ${endpoint}`);
-  }
-}
 
 /**
  * Send a message (admin function)
