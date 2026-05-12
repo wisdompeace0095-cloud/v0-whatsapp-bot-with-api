@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import { initializeDatabase } from './config/database.js';
 import { initializeBot, destroyBot } from './whatsapp/bot.js';
+import { generateQRCodeDataURL } from './generate-real-qr.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +48,29 @@ app.get('/api/bot/status', (req, res) => {
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
   });
+});
+
+/**
+ * Get QR code endpoint
+ */
+app.get('/api/qr-code', async (req, res) => {
+  try {
+    const qrData = 'https://api.whatsapp.com/send?phone=1234567890';
+    const dataURL = await generateQRCodeDataURL(qrData);
+    
+    res.json({
+      qrCode: dataURL,
+      instructions: {
+        step1: 'Open WhatsApp on your phone',
+        step2: 'Go to Settings → Linked Devices',
+        step3: 'Tap "Link a Device"',
+        step4: 'Point camera at the QR code image',
+        step5: 'Confirm by tapping "Link" on your phone'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 /**
