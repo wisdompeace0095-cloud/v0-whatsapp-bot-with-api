@@ -12,7 +12,7 @@ let whatsappClient;
  * Check if running in demo mode
  */
 function isDemoMode() {
-  return process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'sandbox' || process.env.NODE_ENV === 'development' && process.env.BOT_PORT;
+  return process.env.DEMO_MODE === 'true' || !process.env.NODE_ENV || process.env.NODE_ENV === 'sandbox' || process.env.NODE_ENV === 'development';
 }
 
 /**
@@ -22,66 +22,69 @@ export async function initializeBot() {
   try {
     console.log(chalk.blue('[WhatsApp] Initializing WhatsApp bot...'));
 
-    if (isDemoMode()) {
-      console.log(chalk.yellow('[DEMO MODE] Running in sandbox demo mode without Chrome'));
-      // Generate a demo QR code
+    // Always try to initialize real WhatsApp client, but fall back to demo if Chrome is not available
+    try {
+      whatsappClient = new Client();
+
+      // QR Code handler for authentication
+      whatsappClient.on('qr', (qr) => {
+        console.log(chalk.yellow('\n[WhatsApp] Scan this QR code with your phone:\n'));
+        qrcode.generate(qr, { small: true });
+        displayQRCode(qr);
+      });
+
+      // Ready event
+      whatsappClient.on('ready', () => {
+        console.log(chalk.green('[WhatsApp] Bot is ready and connected!'));
+      });
+
+      // Authenticated event
+      whatsappClient.on('authenticated', () => {
+        console.log(chalk.green('[WhatsApp] Successfully authenticated with WhatsApp'));
+      });
+
+      // Auth failure
+      whatsappClient.on('auth_failure', (msg) => {
+        console.log(chalk.red('[WhatsApp] Authentication failed:', msg));
+      });
+
+      // Disconnected
+      whatsappClient.on('disconnected', (reason) => {
+        console.log(chalk.red('[WhatsApp] Bot disconnected:', reason));
+      });
+
+      // Message handler
+      whatsappClient.on('message_create', async (message) => {
+        if (message.isGroup) return; // Ignore group messages
+        
+        console.log(chalk.cyan(`\n[Message] From: ${message.from} | ${message.body}`));
+
+        try {
+          await handleMessage(message);
+        } catch (error) {
+          console.error(chalk.red('[Error] Handling message failed:', error.message));
+          await message.reply(
+            'Sorry, an error occurred while processing your request. Please try again later.'
+          );
+        }
+      });
+
+      await whatsappClient.initialize();
+      console.log(chalk.green('[WhatsApp] Bot initialization started'));
+
+    } catch (browserError) {
+      console.error(chalk.yellow('[WhatsApp] Chrome/Browser error:', browserError.message));
+      console.log(chalk.yellow('[WhatsApp] Falling back to demo mode (no browser available)'));
+      
+      // Fall back to demo mode - show demo QR code
       const demoQRData = 'https://api.whatsapp.com/send?phone=1234567890&text=Hello';
       await displayQRCode(demoQRData);
       console.log(chalk.green('[WhatsApp] Bot ready in DEMO MODE'));
-      return;
     }
-
-    whatsappClient = new Client();
-
-    // QR Code handler for authentication
-    whatsappClient.on('qr', (qr) => {
-      console.log(chalk.yellow('\n[WhatsApp] Scan this QR code with your phone:\n'));
-      qrcode.generate(qr, { small: true });
-      displayQRCode(qr);
-    });
-
-    // Ready event
-    whatsappClient.on('ready', () => {
-      console.log(chalk.green('[WhatsApp] Bot is ready and connected!'));
-    });
-
-    // Authenticated event
-    whatsappClient.on('authenticated', () => {
-      console.log(chalk.green('[WhatsApp] Successfully authenticated with WhatsApp'));
-    });
-
-    // Auth failure
-    whatsappClient.on('auth_failure', (msg) => {
-      console.log(chalk.red('[WhatsApp] Authentication failed:', msg));
-    });
-
-    // Disconnected
-    whatsappClient.on('disconnected', (reason) => {
-      console.log(chalk.red('[WhatsApp] Bot disconnected:', reason));
-    });
-
-    // Message handler
-    whatsappClient.on('message_create', async (message) => {
-      if (message.isGroup) return; // Ignore group messages
-      
-      console.log(chalk.cyan(`\n[Message] From: ${message.from} | ${message.body}`));
-
-      try {
-        await handleMessage(message);
-      } catch (error) {
-        console.error(chalk.red('[Error] Handling message failed:', error.message));
-        await message.reply(
-          'Sorry, an error occurred while processing your request. Please try again later.'
-        );
-      }
-    });
-
-    await whatsappClient.initialize();
-    console.log(chalk.green('[WhatsApp] Bot initialization started'));
 
   } catch (error) {
     console.error(chalk.red('[WhatsApp] Initialization error:', error.message));
-    if (!isDemoMode()) throw error;
+    throw error;
   }
 }
 
