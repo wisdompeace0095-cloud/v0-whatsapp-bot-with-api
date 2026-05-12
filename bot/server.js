@@ -1,11 +1,16 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import { initializeDatabase } from './config/database.js';
 import { initializeBot, destroyBot } from './whatsapp/bot.js';
 
-// Load environment variables
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from bot directory
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.BOT_PORT || 3001;

@@ -15,15 +15,13 @@ export async function initializeBot() {
     console.log(chalk.blue('[WhatsApp] Initializing WhatsApp bot...'));
 
     whatsappClient = new Client({
-      authStrategy: 'WEBAPI',
       puppeteer: {
         headless: true,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--single-process'
+          '--disable-gpu'
         ]
       }
     });

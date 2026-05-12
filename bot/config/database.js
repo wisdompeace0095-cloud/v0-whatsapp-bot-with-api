@@ -1,133 +1,20 @@
-import pkg from 'pg';
-import sqlite3 from 'sqlite3';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const { Pool } = pkg;
-let pool;
-let sqliteDb;
-
-// Initialize appropriate database based on environment
-if (process.env.DATABASE_TYPE === 'sqlite') {
-  sqliteDb = new sqlite3.Database(
-    path.resolve(__dirname, '../', process.env.DATABASE_URL),
-    (err) => {
-      if (err) {
-        console.error('[DB] SQLite connection error:', err);
-      } else {
-        console.log('[DB] SQLite database connected');
-      }
-    }
-  );
-  sqliteDb.configure('busyTimeout', 5000);
-} else {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-  });
-
-  pool.on('error', (err) => {
-    console.error('[DB] Unexpected error on idle client', err);
-  });
-}
+// In-memory database for sandbox testing
+const database = {
+  users: [],
+  conversations: [],
+  api_calls_log: []
+};
 
 /**
  * Initialize database schema
  */
 export async function initializeDatabase() {
   try {
-    console.log('[DB] Initializing database schema...');
-
-    if (process.env.DATABASE_TYPE === 'sqlite') {
-      // SQLite schema
-      await runAsync(sqliteDb, `
-        CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          whatsapp_phone TEXT UNIQUE NOT NULL,
-          authenticated INTEGER DEFAULT 0,
-          user_id TEXT,
-          profile TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-
-      await runAsync(sqliteDb, `
-        CREATE TABLE IF NOT EXISTS conversations (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_phone TEXT NOT NULL,
-          session_id TEXT,
-          user_message TEXT,
-          ai_response TEXT,
-          conversation_context TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_phone) REFERENCES users(whatsapp_phone)
-        );
-      `);
-
-      await runAsync(sqliteDb, `
-        CREATE TABLE IF NOT EXISTS api_calls_log (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_phone TEXT NOT NULL,
-          endpoint TEXT,
-          request_payload TEXT,
-          response TEXT,
-          status TEXT,
-          error_message TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_phone) REFERENCES users(whatsapp_phone)
-        );
-      `);
-    } else {
-      // PostgreSQL schema
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
-          id SERIAL PRIMARY KEY,
-          whatsapp_phone VARCHAR(20) UNIQUE NOT NULL,
-          authenticated BOOLEAN DEFAULT false,
-          user_id VARCHAR(100),
-          profile JSONB,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS conversations (
-          id SERIAL PRIMARY KEY,
-          user_phone VARCHAR(20) NOT NULL,
-          session_id VARCHAR(100),
-          user_message TEXT,
-          ai_response TEXT,
-          conversation_context JSONB,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_phone) REFERENCES users(whatsapp_phone)
-        );
-      `);
-
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS api_calls_log (
-          id SERIAL PRIMARY KEY,
-          user_phone VARCHAR(20) NOT NULL,
-          endpoint VARCHAR(255),
-          request_payload JSONB,
-          response JSONB,
-          status VARCHAR(50),
-          error_message TEXT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (user_phone) REFERENCES users(whatsapp_phone)
-        );
-      `);
-    }
-
+    console.log('[DB] Initializing in-memory database...');
     console.log('[DB] Database schema initialized successfully');
   } catch (err) {
     console.error('[DB] Error initializing database:', err);
@@ -136,21 +23,55 @@ export async function initializeDatabase() {
 }
 
 /**
- * Execute a query
+ * Execute a query (simplified for in-memory)
  */
-export async function query(text, params) {
+export async function query(sql, params) {
   try {
-    if (process.env.DATABASE_TYPE === 'sqlite') {
-      return new Promise((resolve, reject) => {
-        sqliteDb.all(text, params, (err, rows) => {
-          if (err) reject(err);
-          else resolve({ rows });
-        });
-      });
-    } else {
-      const result = await pool.query(text, params);
-      return result;
+    // Parse simple INSERT queries
+    if (sql.includes('INSERT INTO users')) {
+      const user = {
+        id: database.users.length + 1,
+        whatsapp_phone: params[0],
+        authenticated: params[1] || 0,
+        user_id: params[2] || null,
+        profile: params[3] || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      database.users.push(user);
+      return { rows: [user] };
     }
+    
+    if (sql.includes('INSERT INTO conversations')) {
+      const conversation = {
+        id: database.conversations.length + 1,
+        user_phone: params[0],
+        session_id: params[1] || null,
+        user_message: params[2] || null,
+        ai_response: params[3] || null,
+        conversation_context: params[4] || '{}',
+        created_at: new Date().toISOString()
+      };
+      database.conversations.push(conversation);
+      return { rows: [conversation] };
+    }
+
+    if (sql.includes('INSERT INTO api_calls_log')) {
+      const log = {
+        id: database.api_calls_log.length + 1,
+        user_phone: params[0],
+        endpoint: params[1],
+        request_payload: params[2],
+        response: params[3],
+        status: params[4],
+        error_message: params[5] || null,
+        created_at: new Date().toISOString()
+      };
+      database.api_calls_log.push(log);
+      return { rows: [log] };
+    }
+
+    return { rows: [] };
   } catch (err) {
     console.error('[DB] Query error:', err);
     throw err;
@@ -160,19 +81,13 @@ export async function query(text, params) {
 /**
  * Get a single row
  */
-export async function getOne(text, params) {
+export async function getOne(sql, params) {
   try {
-    if (process.env.DATABASE_TYPE === 'sqlite') {
-      return new Promise((resolve, reject) => {
-        sqliteDb.get(text, params, (err, row) => {
-          if (err) reject(err);
-          else resolve(row || null);
-        });
-      });
-    } else {
-      const result = await pool.query(text, params);
-      return result.rows[0] || null;
+    if (sql.includes('SELECT * FROM users WHERE whatsapp_phone')) {
+      const user = database.users.find(u => u.whatsapp_phone === params[0]);
+      return user || null;
     }
+    return null;
   } catch (err) {
     console.error('[DB] Get one error:', err);
     throw err;
@@ -182,19 +97,12 @@ export async function getOne(text, params) {
 /**
  * Get all rows
  */
-export async function getAll(text, params = []) {
+export async function getAll(sql, params = []) {
   try {
-    if (process.env.DATABASE_TYPE === 'sqlite') {
-      return new Promise((resolve, reject) => {
-        sqliteDb.all(text, params, (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        });
-      });
-    } else {
-      const result = await pool.query(text, params);
-      return result.rows;
+    if (sql.includes('SELECT * FROM conversations WHERE user_phone')) {
+      return database.conversations.filter(c => c.user_phone === params[0]) || [];
     }
+    return [];
   } catch (err) {
     console.error('[DB] Get all error:', err);
     throw err;
@@ -205,28 +113,7 @@ export async function getAll(text, params = []) {
  * Close database connection
  */
 export async function closeConnection() {
-  if (process.env.DATABASE_TYPE === 'sqlite') {
-    return new Promise((resolve, reject) => {
-      sqliteDb.close((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  } else {
-    await pool.end();
-  }
+  console.log('[DB] In-memory database closed');
 }
 
-/**
- * SQLite async helper
- */
-function runAsync(db, sql) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-
-export default process.env.DATABASE_TYPE === 'sqlite' ? sqliteDb : pool;
+export default database;
