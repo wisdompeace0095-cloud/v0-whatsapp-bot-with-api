@@ -1,0 +1,298 @@
+MOZOSUBZ WHATSAPP BOT - SYSTEM ARCHITECTURE & FLOW
+
+==============================================
+SYSTEM PROMPT (AI Instructions)
+==============================================
+
+The AI system prompt is embedded in bot/ai/systemPrompt.js and contains:
+
+1. SERVICE INFORMATION
+   - All Mozosubz services (Data, Cable, Electricity, Balance, Deposits)
+   - Available providers and plans
+   - Required information for each service
+
+2. HOW AI GENERATES API CALLS
+   The AI uses this format to instruct the backend:
+   
+   ---API_CALL_START---
+   {
+     "endpoint": "/api/whatsapp/data/plans",
+     "method": "POST",
+     "body": { "serviceID": "mtn_sme" }
+   }
+   ---API_CALL_END---
+
+3. CONVERSATION RULES
+   - Only handle Mozosubz services
+   - Ask clarifying questions if needed
+   - Be friendly and conversational
+   - Explain fees and costs clearly
+
+==============================================
+MESSAGE FLOW: User → AI → API → Response
+==============================================
+
+1. USER SENDS MESSAGE (WhatsApp)
+   Example: "I want to buy MTN data"
+   
+   ↓
+   
+2. BOT RECEIVES MESSAGE (whatsapp/bot.js)
+   - Loads conversation history from database
+   - Extracts user's WhatsApp phone number
+   
+   ↓
+   
+3. SEND TO AI (ai/aiClient.js → sendToAI)
+   - Sends: [system prompt + conversation history + user message]
+   - To: Open Router (poolside/laguna-m.1:free model)
+   - Gets back: AI response with optional API calls
+   
+   ↓
+   
+4. EXTRACT API CALLS
+   - AI response parsed for ---API_CALL_START/END--- blocks
+   - Each block contains: endpoint, method, body
+   
+   ↓
+   
+5. EXECUTE MOZOSUBZ API (api/mozosubzClient.js)
+   - Backend calls the Mozosubz API endpoints
+   - Sends user's WhatsApp phone for authentication
+   - Gets response (plans, prices, transaction details, etc.)
+   
+   ↓
+   
+6. SEND RESPONSE BACK TO AI
+   - AI gets the API results
+   - Formats human-friendly response
+   - Sends back to WhatsApp user
+   
+   ↓
+   
+7. SAVE TO DATABASE
+   - User message, AI response, API calls logged
+   - Conversation history stored for context
+   - Transaction details logged for auditing
+
+==============================================
+MOZOSUBZ API ENDPOINTS CALLED
+==============================================
+
+BASE URL: https://api.mozosubz.com
+
+1. AUTHENTICATION
+   POST /api/whatsapp/authenticate
+   Body: { whatsapp_phone: "+234XXXXXXXXXX" }
+   Response: { success: true, user_id: "...", profile: {...} }
+
+2. DATA SERVICES
+   POST /api/whatsapp/data/plans
+   Body: { serviceID: "mtn_sme" | "glo_data" | "airtel_sme" | etc }
+   Response: { success: true, plans: [{id, name, price, ...}] }
+   
+   POST /api/whatsapp/data/purchase
+   Body: {
+     whatsappPhone: "+234...",
+     serviceID: "mtn_sme",
+     phone: "+234...",
+     value: "1GB",
+     amount: 250
+   }
+   Response: { success: true, transactionId: "...", status: "..." }
+
+3. CABLE SERVICES
+   POST /api/whatsapp/cable/plans
+   Body: { provider: "DSTV" | "GOTV" | "STARTIMES" }
+   Response: { success: true, plans: [{id, name, price, ...}] }
+   
+   POST /api/whatsapp/cable/purchase
+   Body: {
+     whatsappPhone: "+234...",
+     provider: "DSTV",
+     plan: "starter",
+     customerId: "12345678",
+     amount: 2000
+   }
+   Response: { success: true, transactionId: "..." }
+
+4. ELECTRICITY SERVICES
+   POST /api/whatsapp/electricity/plans
+   Body: {}
+   Response: { success: true, discos: [{name, id, ...}] }
+   
+   POST /api/whatsapp/electricity/purchase
+   Body: {
+     whatsappPhone: "+234...",
+     disco: "IKEDC",
+     customerId: "12345678",
+     amount: 5000
+   }
+   Response: { success: true, transactionId: "..." }
+
+5. WALLET & BALANCE
+   POST /api/whatsapp/balance
+   Body: { whatsappPhone: "+234..." }
+   Response: { success: true, balance: 15000.00, formatted: "₦15,000.00" }
+   
+   POST /api/whatsapp/deposit/initiate
+   Body: {
+     whatsappPhone: "+234...",
+     amount: "5000",
+     description: "Wallet top-up"
+   }
+   Response: { success: true, fee: 100, net: 4900, paymentLink: "..." }
+
+==============================================
+COMPLETE EXAMPLE: USER BUYS MTN DATA
+==============================================
+
+USER: "I want to buy 1GB of MTN data"
+
+STEP 1 - BOT RECEIVES
+Message logged with user's phone: +234XXXXXXXXX
+
+STEP 2 - SEND TO AI
+System Prompt: "You are Mozosubz WhatsApp Bot..."
+User Message: "I want to buy 1GB of MTN data"
+Conversation History: [previous messages if any]
+
+STEP 3 - AI THINKS & RESPONDS
+AI understands: Data purchase, MTN provider, 1GB
+AI needs: Phone number to receive data
+
+AI Response:
+"Great! I can help you get 1GB of MTN data. 
+Which phone number should I send it to?"
+
+AI generates NO API call yet (missing phone number)
+
+STEP 4 - USER REPLIES
+USER: "Send it to +2348012345678"
+
+STEP 5 - AI GETS DATA PLANS FIRST
+AI now generates API call:
+
+---API_CALL_START---
+{
+  "endpoint": "/api/whatsapp/data/plans",
+  "method": "POST",
+  "body": { "serviceID": "mtn_sme" }
+}
+---API_CALL_END---
+
+BOT executes this to Mozosubz API
+Returns: [
+  {id: "100mb", name: "100MB", price: 100},
+  {id: "500mb", name: "500MB", price: 200},
+  {id: "1gb", name: "1GB", price: 250},
+  {id: "2gb", name: "2GB", price: 400}
+]
+
+AI Response:
+"Perfect! Here are the MTN 1GB options:
+- 1GB for ₦250
+- 2GB for ₦400
+
+Shall I proceed with 1GB for ₦250?"
+
+STEP 6 - USER CONFIRMS
+USER: "Yes go ahead"
+
+STEP 7 - AI EXECUTES PURCHASE
+AI generates final API call:
+
+---API_CALL_START---
+{
+  "endpoint": "/api/whatsapp/data/purchase",
+  "method": "POST",
+  "body": {
+    "whatsappPhone": "+234XXXXXXXXX",
+    "serviceID": "mtn_sme",
+    "phone": "+2348012345678",
+    "value": "1GB",
+    "amount": 250
+  }
+}
+---API_CALL_END---
+
+BOT executes purchase
+Returns: {
+  success: true,
+  transactionId: "TXN123456",
+  status: "successful",
+  recipient: "+2348012345678",
+  data: "1GB",
+  amount: 250,
+  timestamp: "2024-05-12T10:30:00Z"
+}
+
+STEP 8 - AI SENDS SUCCESS MESSAGE
+"✓ Success! 1GB of MTN data has been sent to +2348012345678
+Amount: ₦250
+Transaction ID: TXN123456"
+
+STEP 9 - SAVE TO DATABASE
+- Conversation logged
+- API calls logged for audit
+- Transaction stored
+
+==============================================
+HOW TO SCAN QR CODE AFTER DEPLOYMENT TO RENDER
+==============================================
+
+1. BOT IS DEPLOYED ON RENDER (has Chrome available)
+   - whatsapp-web.js loads WhatsApp Web in headless Chrome
+   - Connects to WhatsApp servers
+   - Generates REAL valid QR code
+
+2. QR CODE DISPLAYED IN RENDER LOGS
+   - When bot starts, qrcode-terminal shows ASCII QR code
+   - Real QR code in text format
+   - You can scan it with your phone camera
+
+3. TO SCAN:
+   - Open WhatsApp on your phone
+   - Settings → Linked Devices
+   - Tap "Link a Device"
+   - Point camera at terminal QR code (or visit https://your-bot-name.render.com/api/qr-code)
+   - Confirm on phone
+   - Bot authenticated and listening!
+
+4. HOW IT WORKS ON RENDER:
+   - Render has Chrome/Chromium pre-installed
+   - whatsapp-web.js runs Chrome in headless mode
+   - Chrome renders WhatsApp Web
+   - QR code is real and valid
+   - Users scan and authenticate
+
+==============================================
+DEPLOYMENT STEPS
+==============================================
+
+1. Push code to GitHub (already done)
+2. Go to https://dashboard.render.com/web/new
+3. Connect GitHub repo
+4. Settings:
+   - Name: mozosubz-whatsapp-bot
+   - Build: pnpm install
+   - Start: npm run bot:start
+   - Env vars: (see .env file)
+
+5. Deploy
+6. After ~2 min, open Render dashboard
+7. Go to "Logs" tab
+8. Look for QR code (ASCII art)
+9. Scan with WhatsApp phone
+10. Done!
+
+==============================================
+KEY FILES
+==============================================
+
+bot/ai/systemPrompt.js      - AI Instructions
+bot/ai/aiClient.js          - Calls Open Router API
+bot/api/mozosubzClient.js   - Calls Mozosubz endpoints
+bot/whatsapp/bot.js         - Receives WhatsApp messages
+bot/server.js               - Express server & QR endpoint
+bot/.env                    - Configuration (API keys, URLs)
