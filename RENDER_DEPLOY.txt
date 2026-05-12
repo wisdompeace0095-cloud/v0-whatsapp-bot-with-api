@@ -1,0 +1,148 @@
+MOZOSUBZ WHATSAPP BOT - DEPLOYMENT TO RENDER
+==============================================
+
+THE BOT NOW USES AI TOOL CALLING
+- AI directly calls Mozosubz endpoints as functions
+- No more text parsing - cleaner and more reliable
+- Open Router function calling integrated
+
+TO DEPLOY TO RENDER:
+
+1. Go to: https://dashboard.render.com/
+
+2. Click "New +" → "Web Service"
+
+3. Select GitHub and authorize if needed
+
+4. Paste repository URL:
+   https://github.com/wisdompeace0095-cloud/v0-whatsapp-bot-with-api
+
+5. Fill in the form:
+   - Name: mozosubz-whatsapp-bot
+   - Region: Virginia (or your preferred region)
+   - Branch: main
+   - Runtime: Node
+   - Build Command: pnpm install
+   - Start Command: npm run bot:start
+   - Plan: Free (or Starter for better performance)
+
+6. Add Environment Variables (click "Add Environment Variable"):
+   NODE_ENV = production
+   BOT_PORT = 3001
+   OPENROUTER_API_KEY = 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
+   MOZOSUBZ_API_BASE = https://api.mozosubz.com
+   OPENROUTER_MODEL = poolside/laguna-m.1:free
+   LOG_LEVEL = info
+   DEMO_MODE = false
+
+7. Click "Create Web Service"
+
+8. Render will auto-deploy when you push to GitHub
+
+VIEWING THE QR CODE:
+====================
+
+After deployment:
+
+1. Go to your Render dashboard
+2. Click on the service "mozosubz-whatsapp-bot"
+3. Click on "Logs"
+4. Look for the message: "[WhatsApp] Scan this QR code with your phone:"
+5. The QR code will be displayed in ASCII format in the logs
+6. You can also see it in the terminal output
+
+Alternatively:
+1. The bot runs on Render's servers which have Chrome/Chromium
+2. whatsapp-web.js will generate a real, valid QR code
+3. The QR code changes for security - scan it within a few minutes
+4. Open WhatsApp → Settings → Linked Devices → Link a Device
+5. Point your phone camera at the QR code in the logs
+6. Tap "Link" to confirm
+
+DATABASE (PostgreSQL):
+======================
+
+PostgreSQL instance already created on Render:
+- Name: mozosubz-bot-db
+- Region: Virginia
+
+Get the DATABASE_URL from the database dashboard and add it as an environment variable to the web service.
+
+HOW THE NEW TOOL CALLING WORKS:
+===============================
+
+OLD WAY (Text Parsing):
+User → AI generates JSON text → Bot parses text → Execute
+
+NEW WAY (Tool Calling):
+User → AI directly calls functions → Tools execute → Results formatted
+
+This is much more reliable because:
+1. No text parsing errors
+2. Structured function calls
+3. Better error handling
+4. Faster execution
+5. More predictable behavior
+
+EXAMPLE USER FLOW:
+
+User: "Buy me MTN data for 250 naira"
+
+1. Bot receives message
+2. Bot sends to AI with tool definitions available
+3. AI understands the request
+4. AI calls: get_data_plans("mtn_sme")
+5. Tool executes and returns available plans
+6. AI gets the results
+7. AI calls: purchase_data("mtn_sme", phone, plan_id, 250)
+8. Tool executes purchase
+9. AI gets success response
+10. AI formats friendly message
+11. Bot sends: "✓ 250 naira MTN data purchased! Valid for 30 days"
+
+All happens in one conversation turn - much smoother!
+
+TOOLS AVAILABLE TO AI:
+======================
+
+1. get_data_plans(provider)
+   - Gets available data plans for MTN, Glo, Airtel, Etisalat
+
+2. purchase_data(provider, phone, plan_id, amount)
+   - Purchases data for a phone number
+
+3. get_cable_plans(provider)
+   - Gets DSTV, GOTV, STARTIMES plans
+
+4. purchase_cable(provider, decoder_number, plan_id, amount)
+   - Subscribes to cable TV
+
+5. get_electricity_plans(disco)
+   - Gets electricity plans for a DISCO
+
+6. purchase_electricity(disco, meter_number, amount)
+   - Purchases electricity units
+
+7. check_balance()
+   - Checks wallet balance
+
+8. initiate_deposit(amount)
+   - Starts a wallet deposit
+
+TROUBLESHOOTING:
+================
+
+QR Code not showing in logs:
+- Check that NODE_ENV is set to "production"
+- Check DEMO_MODE is false
+- Restart the service
+
+Bot not responding:
+- Check OPENROUTER_API_KEY is correct
+- Check MOZOSUBZ_API_BASE is set to https://api.mozosubz.com
+- Check logs for error messages
+
+Connection issues:
+- Ensure Chrome is available (Render has it)
+- Check internet connectivity
+- Review error logs in Render dashboard

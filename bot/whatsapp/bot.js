@@ -107,53 +107,28 @@ async function handleMessage(message) {
 
     // Send to AI with context
     console.log('[Processing] Sending to AI with', conversationHistory.length, 'previous messages');
-    const aiResponse = await sendToAI(userMessage, conversationHistory);
+    const aiResponse = await sendToAI(userMessage, conversationHistory, whatsappPhone);
 
-    // Extract user-friendly message
+    // Get AI response message
     let responseText = aiResponse.message;
     if (!responseText || responseText.length === 0) {
       responseText = "I'm processing your request. Let me know if you need anything else!";
     }
 
-    // If AI generated API calls, execute them
-    if (aiResponse.apiCalls && aiResponse.apiCalls.length > 0) {
-      console.log('[Processing] Executing', aiResponse.apiCalls.length, 'API calls');
+    // Log tool results if any
+    if (aiResponse.toolResults && aiResponse.toolResults.length > 0) {
+      console.log(`[Tools] AI executed ${aiResponse.toolResults.length} tools`);
       
-      for (const apiCall of aiResponse.apiCalls) {
-        try {
-          const result = await executeAPICall(whatsappPhone, apiCall, user);
-          
-          // Log successful API call
-          await conversationService.logAPICall(
-            whatsappPhone,
-            apiCall.endpoint,
-            apiCall.body || {},
-            result,
-            'success',
-            null
-          );
-
-          // Append result to response if relevant
-          if (result && result.formatted) {
-            responseText += `\n\n${result.formatted}`;
-          } else if (result && result.message) {
-            responseText += `\n\n${result.message}`;
-          }
-        } catch (error) {
-          console.error('[Error] API call failed:', error.message);
-          
-          // Log failed API call
-          await conversationService.logAPICall(
-            whatsappPhone,
-            apiCall.endpoint,
-            apiCall.body || {},
-            null,
-            'failed',
-            error.message
-          );
-
-          responseText += `\n\nError: ${error.message}`;
-        }
+      for (const toolResult of aiResponse.toolResults) {
+        // Log all tool calls
+        await conversationService.logAPICall(
+          whatsappPhone,
+          `tool:${toolResult.tool}`,
+          {},
+          toolResult.result,
+          toolResult.status,
+          toolResult.status === 'error' ? toolResult.result : null
+        );
       }
     }
 
@@ -162,7 +137,11 @@ async function handleMessage(message) {
       whatsappPhone,
       userMessage,
       responseText,
-      { timestamp: new Date(), success: true }
+      { 
+        timestamp: new Date(), 
+        success: true,
+        toolCount: aiResponse.toolCount || 0
+      }
     );
 
     // Send response back to user
@@ -189,24 +168,6 @@ async function handleMessage(message) {
     throw error;
   }
 }
-
-/**
- * Execute API call based on AI instruction
- */
-async function executeAPICall(whatsappPhone, apiCall, user) {
-  const { endpoint, method, body } = apiCall;
-
-  console.log('[API] Executing:', endpoint);
-
-  switch (endpoint) {
-    case '/api/whatsapp/authenticate':
-      return await mozosubz.authenticateUser(whatsappPhone);
-
-    case '/api/whatsapp/data/plans':
-      return await mozosubz.getDataPlans(body.serviceID);
-
-    case '/api/whatsapp/data/purchase':
-      return await mozosubz.purchaseData(
         whatsappPhone,
         body.serviceID,
         body.phone,
