@@ -1,4 +1,4 @@
-import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
+import { Client } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 import chalk from 'chalk';
 import { sendToAI } from '../ai/aiClient.js';
@@ -15,9 +15,7 @@ export async function initializeBot() {
     console.log(chalk.blue('[WhatsApp] Initializing WhatsApp bot...'));
 
     whatsappClient = new Client({
-      authStrategy: new LocalAuth({
-        clientId: process.env.WHATSAPP_SESSION_NAME || 'mozosubz-bot'
-      }),
+      authStrategy: 'WEBAPI',
       puppeteer: {
         headless: true,
         args: [
