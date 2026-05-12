@@ -4,8 +4,16 @@ import chalk from 'chalk';
 import { sendToAI } from '../ai/aiClient.js';
 import * as mozosubz from '../api/mozosubzClient.js';
 import * as conversationService from '../services/conversationService.js';
+import { displayQRCode } from './qr-generator.js';
 
 let whatsappClient;
+
+/**
+ * Check if running in demo mode
+ */
+function isDemoMode() {
+  return process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'sandbox' || process.env.NODE_ENV === 'development' && process.env.BOT_PORT;
+}
 
 /**
  * Initialize WhatsApp bot
@@ -14,22 +22,22 @@ export async function initializeBot() {
   try {
     console.log(chalk.blue('[WhatsApp] Initializing WhatsApp bot...'));
 
-    whatsappClient = new Client({
-      puppeteer: {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu'
-        ]
-      }
-    });
+    if (isDemoMode()) {
+      console.log(chalk.yellow('[DEMO MODE] Running in sandbox demo mode without Chrome'));
+      // Generate a demo QR code
+      const demoQRData = 'https://api.whatsapp.com/send?phone=1234567890&text=Hello';
+      await displayQRCode(demoQRData);
+      console.log(chalk.green('[WhatsApp] Bot ready in DEMO MODE'));
+      return;
+    }
+
+    whatsappClient = new Client();
 
     // QR Code handler for authentication
     whatsappClient.on('qr', (qr) => {
       console.log(chalk.yellow('\n[WhatsApp] Scan this QR code with your phone:\n'));
       qrcode.generate(qr, { small: true });
+      displayQRCode(qr);
     });
 
     // Ready event
@@ -72,8 +80,8 @@ export async function initializeBot() {
     console.log(chalk.green('[WhatsApp] Bot initialization started'));
 
   } catch (error) {
-    console.error(chalk.red('[WhatsApp] Initialization error:', error));
-    throw error;
+    console.error(chalk.red('[WhatsApp] Initialization error:', error.message));
+    if (!isDemoMode()) throw error;
   }
 }
 
