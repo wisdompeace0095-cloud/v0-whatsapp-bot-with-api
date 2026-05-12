@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: mozosubz-whatsapp-bot
+    runtime: node
+    plan: free
+    startCommand: npm run bot:start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BOT_PORT
+        value: 3001
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: MOZOSUBZ_API_BASE
+        value: https://api.mozosubz.xyz
+      - key: WHATSAPP_SESSION_NAME
+        value: mozosubz-bot
+      - key: LOG_LEVEL
+        value: info
+
+databases:
+  - name: mozosubz-postgres
+    plan: free
+    ipAllowList: []
+
+env:
+  - key: DATABASE_URL
+    sync: false
